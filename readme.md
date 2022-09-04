@@ -1,5 +1,6 @@
 # Example python space tycoon bot
 
+
 ! Fork this repository !
 
 Install dependencies
