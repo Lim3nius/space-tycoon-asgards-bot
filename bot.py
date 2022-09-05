@@ -1,4 +1,5 @@
 import math
+import random
 import traceback
 from collections import defaultdict
 from collections import Counter
@@ -17,6 +18,7 @@ from space_tycoon_client.models.destination import Destination
 from space_tycoon_client.models.end_turn import EndTurn
 from space_tycoon_client.models.move_command import MoveCommand
 from space_tycoon_client.models.attack_command import AttackCommand
+from space_tycoon_client.models.stop_command import StopCommand
 from space_tycoon_client.models.construct_command import ConstructCommand
 from space_tycoon_client.models.trade_command import TradeCommand
 from space_tycoon_client.models.player import Player
@@ -204,6 +206,9 @@ class Game:
 
         commands = {}
         for ship_id, ship in my_ships.items():
+            if random.random() < 0.1:
+                commands[ship_id] = StopCommand()
+                continue
             if ship.command is not None:
                 continue
             command = None
