@@ -20,6 +20,7 @@ from space_tycoon_client.models.end_turn import EndTurn
 from space_tycoon_client.models.move_command import MoveCommand
 from space_tycoon_client.models.attack_command import AttackCommand
 from space_tycoon_client.models.stop_command import StopCommand
+from space_tycoon_client.models.repair_command import RepairCommand
 from space_tycoon_client.models.construct_command import ConstructCommand
 from space_tycoon_client.models.trade_command import TradeCommand
 from space_tycoon_client.models.player import Player
@@ -89,9 +90,6 @@ class Game:
 
     def get_cargo_plan(self):
         mothership_coords = self.get_mothership_coords()
-
-        print(mothership_coords)
-
         buys = defaultdict(list)
         sells = defaultdict(list)
         for planet, planet_data in self.data.planets.items():
@@ -115,7 +113,7 @@ class Game:
                     if not mothership_coords:
                         continue
                     d = self.dist(mothership_coords, buy['position']) + self.dist(buy['position'], sell['position'])
-                    score = price / (d ** 1.1)
+                    score = price / (d ** 1.3)
                     best_deals.append((score, resource, buy, sell))
         return sorted(best_deals, reverse=True, key=lambda tup: tup[0])
 
@@ -142,7 +140,7 @@ class Game:
     def construct_ship(self, ship_class):
         my_money = self.data.players[self.player_id].net_worth.money
         ship_price = self.static_data.ship_classes[ship_class].price
-        if (my_money - ship_price) > 30000:
+        if (my_money - ship_price) > 80000:
             return ConstructCommand(ship_class=ship_class)
 
     def get_mothership_coords(self):
@@ -155,6 +153,10 @@ class Game:
         return self.my_mothership_coords
 
     def get_mothership_command(self, ship, ship_id):
+        # return MoveCommand(destination=Destination(coordinates=[-412, -670]))
+        # return AttackCommand(target='162900')
+        if self.data.ships[ship_id].life < 700:
+            return RepairCommand()
         my_ships: Dict[Ship] = {ship_id: ship for ship_id, ship in
                                 self.data.ships.items() if ship.player == self.player_id}
         ship_type_cnt = Counter(self.static_data.ship_classes[ship.ship_class].name for ship in my_ships.values())
@@ -167,12 +169,13 @@ class Game:
         my_coords = self.data.ships[ship_id].position
         other_coords = {ship_id: self.data.ships[ship_id].position for ship_id in other_fighter_ships}
         distances = Counter(
-            {ship_id: -self.dist(my_coords, other_coord) for ship_id, other_coord in other_coords.items()})
+            {ship_id: self.dist(my_coords, other_coord) for ship_id, other_coord in other_coords.items()})
+        distances = [(self.data.ships[ship_id].ship_class, ship_id, dist)
+                     for ship_id, dist in distances.items() if dist < 100]
+        distances = sorted(distances, reverse=True)
         if distances:
-            closest_ship, smallest_dist = distances.most_common(1)[0]
-            smallest_dist *= -1
-            if smallest_dist < 100:
-                return AttackCommand(target=closest_ship)
+            _, ship_id, d = distances[0]
+            return AttackCommand(target=ship_id)
 
         return self.construct_ship(ship_class='2')
 
@@ -187,12 +190,13 @@ class Game:
         my_coords = self.data.ships[ship_id].position
         other_coords = {ship_id: self.data.ships[ship_id].position for ship_id in other_ships}
         distances = Counter(
-            {ship_id: -self.dist(my_coords, other_coord) for ship_id, other_coord in other_coords.items()})
+            {ship_id: self.dist(my_coords, other_coord) for ship_id, other_coord in other_coords.items()})
+        distances = [(self.data.ships[ship_id].ship_class, ship_id, dist)
+                     for ship_id, dist in distances.items() if dist < 5]
+        distances = sorted(distances, reverse=True)
         if distances:
-            closest_ship, smallest_dist = distances.most_common(1)[0]
-            smallest_dist *= -1
-            if smallest_dist < 5:
-                return AttackCommand(target=closest_ship)
+            _, ship_id, d = distances[0]
+            return AttackCommand(target=ship_id)
 
         mothership_coords = self.get_mothership_coords()
         return MoveCommand(destination=Destination(coordinates=mothership_coords))
