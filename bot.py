@@ -1,5 +1,6 @@
 import math
 import random
+import datetime
 import traceback
 from collections import defaultdict
 from collections import Counter
@@ -62,7 +63,13 @@ class Game:
                 self.data: Data = self.client.data_get()
                 if self.data.player_id is None:
                     raise Exception("I am not correctly logged in. Bailing out")
-                self.game_logic()
+
+                t0 = datetime.datetime.now()
+                try:
+                    self.game_logic()
+                finally:
+                    print(f'Tick took: {datetime.datetime.now() - t0}')
+
                 current_tick: CurrentTick = self.client.end_turn_post(EndTurn(
                     tick=self.tick,
                     season=self.season
