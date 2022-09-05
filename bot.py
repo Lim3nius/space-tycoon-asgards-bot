@@ -47,6 +47,7 @@ class Game:
             raise Exception("Logged as non-existent player")
         self.recreate_me()
         print(f"playing as [{self.me.name}] id: {self.player_id}")
+        self.my_mothership_coords = None
 
     def recreate_me(self):
         self.me: Player = self.data.players[self.player_id]
@@ -131,12 +132,28 @@ class Game:
     def dist(self, coords1, coords2):
         return math.sqrt((coords1[0] - coords2[0]) ** 2 + (coords1[1] - coords2[1]) ** 2)
 
+    def construct_ship(self, ship_class):
+        my_money = self.data.players[self.player_id].net_worth.money
+        ship_price = self.static_data.ship_classes[ship_class].price
+        if my_money >= ship_price:
+            return ConstructCommand(ship_class=ship_class)
+
+    def get_mothership_coords(self):
+        my_mothership = None
+        for ship in self.data.ships.values():
+            if ship.player == self.player_id and ship.ship_class == '1':
+                my_mothership = ship
+        if my_mothership:
+            self.my_mothership_coords = my_mothership.position
+        return self.my_mothership_coords
+
     def get_mothership_command(self, ship, ship_id):
         my_ships: Dict[Ship] = {ship_id: ship for ship_id, ship in
                                 self.data.ships.items() if ship.player == self.player_id}
         ship_type_cnt = Counter(self.static_data.ship_classes[ship.ship_class].name for ship in my_ships.values())
-        if 'bomber' not in ship_type_cnt:
-            return ConstructCommand(ship_class='5')
+
+        if 'fighter' not in ship_type_cnt or ship_type_cnt['fighter'] < 2:
+            return self.construct_ship(ship_class='4')
 
         other_fighter_ships = {ship_id: ship for ship_id, ship in self.data.ships.items() if
                                ship.player != self.player_id and ship.ship_class in ('1', '4', '5', '6')}
@@ -150,16 +167,34 @@ class Game:
             if smallest_dist < 20:
                 return AttackCommand(target=closest_ship)
 
-    def get_fighter_command(self, ship):
-        other_motherships = {ship_id: ship for ship_id, ship in
-                             self.data.ships.items() if ship.player != self.player_id and ship.ship_class == '1'}
-        if other_motherships:
-            mothership_id = list(other_motherships.keys())[0]
-            return AttackCommand(target=mothership_id)
+        return self.construct_ship(ship_class='2')
+
+    def get_fighter_command(self, ship, ship_id):
+        # other_motherships = {ship_id: ship for ship_id, ship in
+        #                      self.data.ships.items() if ship.player != self.player_id and ship.ship_class == '1'}
+        # if other_motherships:
+        #     mothership_id = list(other_motherships.keys())[0]
+        #     return AttackCommand(target=mothership_id)
+
+        other_ships = {ship_id: ship for ship_id, ship in self.data.ships.items() if ship.player != self.player_id}
+        my_coords = self.data.ships[ship_id].position
+        other_coords = {ship_id: self.data.ships[ship_id].position for ship_id in other_ships}
+        distances = Counter(
+            {ship_id: -self.dist(my_coords, other_coord) for ship_id, other_coord in other_coords.items()})
+        if distances:
+            closest_ship, smallest_dist = distances.most_common(1)[0]
+            smallest_dist *= -1
+            if smallest_dist < 100:
+                return AttackCommand(target=closest_ship)
+
+        mothership_coords = self.get_mothership_coords()
+        return MoveCommand(destination=Destination(coordinates=mothership_coords))
+
 
     def game_logic(self):
         # todo throw all this away
         self.recreate_me()
+
         my_ships: Dict[Ship] = {ship_id: ship for ship_id, ship in
                                 self.data.ships.items() if ship.player == self.player_id}
         ship_type_cnt = Counter(
@@ -180,7 +215,7 @@ class Game:
             if ship.ship_class == '1':
                 command = self.get_mothership_command(ship, ship_id)
             if ship.ship_class in ('4', '5', '6'):
-                command = self.get_fighter_command(ship)
+                command = self.get_fighter_command(ship, ship_id)
             if command:
                 commands[ship_id] = command
 
