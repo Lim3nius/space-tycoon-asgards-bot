@@ -2,13 +2,15 @@ import math
 import random
 import datetime
 import traceback
+import enum
+import yaml
+import sys
 from collections import defaultdict
 from collections import Counter
 from pprint import pprint
-from typing import Dict
-from typing import Optional
+from typing import Dict, Optional, List
+from dataclasses import dataclass
 
-import yaml
 from space_tycoon_client import ApiClient
 from space_tycoon_client import Configuration
 from space_tycoon_client import GameApi
@@ -36,6 +38,41 @@ class ConfigException(Exception):
     pass
 
 
+@dataclass
+class Coords:
+    x: int
+    y: int
+
+    def from_position(pos: List[int]) -> 'Coords':
+        return Coords(
+            x=pos[0],
+            y=pos[1]
+        )
+
+
+@dataclass
+class EnemyShip:
+    id: str
+    position: Coords
+    vector: Coords
+
+
+ships_class_mapping={
+    '1': 'mothership',
+    '2': 'hauler',
+    '3': 'shipper',
+    '4': 'fighter',
+    '5': 'bomber',
+    '6': 'destroyer',
+    '7': 'shipyard'
+}
+
+def ship_class_id_to_human(id: str) -> str:
+    return ships_class_mapping[id]
+
+
+attacking_ship_classes={'mothership', 'fighter', 'bomber', 'desctroyer'}
+
 class Game:
     def __init__(self, api_client: GameApi, config: Dict[str, str]):
         self.me: Optional[Player] = None
@@ -46,6 +83,9 @@ class Game:
         self.data: Data = self.client.data_get()
         self.season = self.data.current_tick.season
         self.tick = self.data.current_tick.tick
+
+        self.enemies_ships: List[EnemyShip] = []
+
         # this part is custom logic, feel free to edit / delete
         if self.player_id not in self.data.players:
             raise Exception("Logged as non-existent player")
@@ -86,7 +126,6 @@ class Game:
             except Exception as e:
                 print(f"!!! EXCEPTION !!! Game logic error {e}")
                 traceback.print_exc()
-                print(traceback.format_exc())
 
     def get_cargo_plan(self):
         mothership_coords = self.get_mothership_coords()
@@ -133,6 +172,11 @@ class Game:
 
         return TradeCommand(target=buy['planet'], resource=resource, amount=min(10 if ship.ship_class == '3' else 40,
                                                                                 buy['amount']))
+
+    @staticmethod
+    def move_vector(ship: Ship) -> Coords:
+        return Coords(x=ship.prev_position[0] - ship.position[0],
+                      y=ship.prev_position[1] - ship.position[1])
 
     def dist(self, coords1, coords2):
         return math.sqrt((coords1[0] - coords2[0]) ** 2 + (coords1[1] - coords2[1]) ** 2)
@@ -207,9 +251,22 @@ class Game:
             planet = self.data.planets[planet_id]
             return planet.position == ship.position
 
+    def detect_enemies(self):
+        # saves positions and vector of enemy ships into self.enemies_ships
+        self.enemies_ships = []
+        for ship_id, ship in self.data.ships.items():
+            if ship_class_id_to_human(ship.ship_class) in attacking_ship_classes and ship.player != self.player_id:
+                self.enemies_ships.append(EnemyShip(
+                    id=ship_id,
+                    position=Coords.from_position(ship.position),
+                    vector=self.move_vector(ship)
+                ))
+
     def game_logic(self):
         # todo throw all this away
         self.recreate_me()
+
+        self.detect_enemies()
 
         my_ships: Dict[Ship] = {ship_id: ship for ship_id, ship in
                                 self.data.ships.items() if ship.player == self.player_id}
@@ -275,6 +332,8 @@ def main_loop(api_client, config):
         except ConfigException as e:
             print(f"User / password was not configured in the config file [{CONFIG_FILE}]")
             return
+        except KeyboardInterrupt:
+            sys.exit(0)
         except Exception as e:
             print(f"Unexpected error {e}")
 
