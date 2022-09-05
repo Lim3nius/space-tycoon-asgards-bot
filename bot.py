@@ -79,55 +79,51 @@ class Game:
                 print(traceback.format_exc())
 
     def get_cargo_plan(self):
-        sells = defaultdict(dict)
-        buys = defaultdict(dict)
+        mothership_coords = self.get_mothership_coords()
+
+        print(mothership_coords)
+
+        buys = defaultdict(list)
+        sells = defaultdict(list)
         for planet, planet_data in self.data.planets.items():
             for resource, resource_data in planet_data.resources.items():
                 if resource_data.buy_price is not None:
-                    buys[resource][planet] = resource_data
+                    buys[resource].append({'planet': planet,
+                                           'amount': resource_data.amount,
+                                           'buy_price': resource_data.buy_price,
+                                           'position': planet_data.position})
                 if resource_data.sell_price is not None:
-                    sells[resource][planet] = resource_data
+                    sells[resource].append({'planet': planet,
+                                            'sell_price': resource_data.sell_price,
+                                            'position': planet_data.position})
 
         resources = sells.keys() & buys.keys()
-        best_buys = dict()
+        best_deals = []
         for resource in resources:
-            best_buy_price = float('inf')
-            best_buy_planet = None
-            for planet, resource_data in buys[resource].items():
-                if resource_data.buy_price < best_buy_price:
-                    best_buy_price = resource_data.buy_price
-                    best_buy_planet = planet
-            best_buys[resource] = {'planet': best_buy_planet, 'buy_price': best_buy_price}
+            for buy in buys[resource]:
+                for sell in sells[resource]:
+                    price = sell['sell_price'] - buy['buy_price']
+                    d = self.dist(mothership_coords, buy['position']) + self.dist(buy['position'], sell['position'])
+                    score = price / d
+                    best_deals.append((score, resource, buy, sell))
+        return sorted(best_deals, reverse=True, key=lambda tup: tup[0])
 
-        best_sells = dict()
-        for resource in resources:
-            best_sell_price = float('inf')
-            best_sell_planet = None
-            for planet, resource_data in sells[resource].items():
-                if resource_data.sell_price < best_sell_price:
-                    best_sell_price = resource_data.sell_price
-                    best_sell_planet = planet
-            best_sells[resource] = {'planet': best_sell_planet, 'sell_price': best_sell_price}
-
-        best_deals = Counter({r: best_sells[r]['sell_price'] - best_buys[r]['buy_price'] for r in resources})
-        plan = []
-        for resource, profit in best_deals.most_common():
-            planet = best_buys[resource]['planet']
-            amount = buys[resource][planet].amount
-            plan.append((resource, planet, amount))
-        return plan, best_sells
-
-    def get_cargo_command(self, ship, plan, best_sells):
+    def get_cargo_command(self, ship, plan):
         if ship.resources.keys():
             resource = list(ship.resources.keys())[0]
-            planet = best_sells[resource]['planet']
-            amount = ship.resources[resource]['amount']
-            if amount:
-                return TradeCommand(target=planet, resource=resource, amount=-amount)
-        resource, planet, amount = plan.pop(0)
-        ship_load = sum(r['amount'] for r in ship.resources.values())
+            # score, resource, buy, sell
+            for i, p in enumerate(plan):
+                if p[1] == resource:
+                    planet = p[3]['planet']
+                    amount = ship.resources[resource]['amount']
+                    return TradeCommand(target=planet, resource=resource, amount=-amount)
+
+        score, resource, buy, sell = plan.pop(0)
+        # ship_load = sum(r['amount'] for r in ship.resources.values())
         # ship_free_capacity = ship.cargo_capacity - ship_load # todo must use common data
-        return TradeCommand(target=planet, resource=resource, amount=min(amount, 10))
+
+        return TradeCommand(target=buy['planet'], resource=resource, amount=min(10 if ship.ship_class == '3' else 40,
+                                                                                buy['amount']))
 
     def dist(self, coords1, coords2):
         return math.sqrt((coords1[0] - coords2[0]) ** 2 + (coords1[1] - coords2[1]) ** 2)
@@ -135,7 +131,7 @@ class Game:
     def construct_ship(self, ship_class):
         my_money = self.data.players[self.player_id].net_worth.money
         ship_price = self.static_data.ship_classes[ship_class].price
-        if my_money >= ship_price:
+        if (my_money - ship_price) > 30000:
             return ConstructCommand(ship_class=ship_class)
 
     def get_mothership_coords(self):
@@ -164,7 +160,7 @@ class Game:
         if distances:
             closest_ship, smallest_dist = distances.most_common(1)[0]
             smallest_dist *= -1
-            if smallest_dist < 20:
+            if smallest_dist < 50:
                 return AttackCommand(target=closest_ship)
 
         return self.construct_ship(ship_class='2')
@@ -184,12 +180,11 @@ class Game:
         if distances:
             closest_ship, smallest_dist = distances.most_common(1)[0]
             smallest_dist *= -1
-            if smallest_dist < 100:
+            if smallest_dist < 50:
                 return AttackCommand(target=closest_ship)
 
         mothership_coords = self.get_mothership_coords()
         return MoveCommand(destination=Destination(coordinates=mothership_coords))
-
 
     def game_logic(self):
         # todo throw all this away
@@ -203,7 +198,7 @@ class Game:
             f"{k}:{v}" for k, v in ship_type_cnt.most_common())
         print(f"I have {len(my_ships)} ships ({pretty_ship_type_cnt})")
 
-        plan, best_sells = self.get_cargo_plan()
+        plan = self.get_cargo_plan()
 
         commands = {}
         for ship_id, ship in my_ships.items():
@@ -211,7 +206,7 @@ class Game:
                 continue
             command = None
             if ship.ship_class in ('2', '3'):
-                command = self.get_cargo_command(ship, plan, best_sells)
+                command = self.get_cargo_command(ship, plan)
             if ship.ship_class == '1':
                 command = self.get_mothership_command(ship, ship_id)
             if ship.ship_class in ('4', '5', '6'):
