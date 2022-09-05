@@ -150,7 +150,7 @@ class Game:
                                 self.data.ships.items() if ship.player == self.player_id}
         ship_type_cnt = Counter(self.static_data.ship_classes[ship.ship_class].name for ship in my_ships.values())
 
-        if 'fighter' not in ship_type_cnt or ship_type_cnt['fighter'] < 2:
+        if 'fighter' not in ship_type_cnt or ship_type_cnt['fighter'] < 3:
             return self.construct_ship(ship_class='4')
 
         other_fighter_ships = {ship_id: ship for ship_id, ship in self.data.ships.items() if
@@ -162,7 +162,7 @@ class Game:
         if distances:
             closest_ship, smallest_dist = distances.most_common(1)[0]
             smallest_dist *= -1
-            if smallest_dist < 50:
+            if smallest_dist < 200:
                 return AttackCommand(target=closest_ship)
 
         return self.construct_ship(ship_class='2')
@@ -182,7 +182,7 @@ class Game:
         if distances:
             closest_ship, smallest_dist = distances.most_common(1)[0]
             smallest_dist *= -1
-            if smallest_dist < 50:
+            if smallest_dist < 200:
                 return AttackCommand(target=closest_ship)
 
         mothership_coords = self.get_mothership_coords()
