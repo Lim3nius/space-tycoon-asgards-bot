@@ -111,8 +111,10 @@ class Game:
                 for sell in sells[resource]:
                     price = sell['sell_price'] - buy['buy_price']
                     if not mothership_coords:
+                        print('no mothership coords')
                         continue
-                    d = self.dist(mothership_coords, buy['position']) + self.dist(buy['position'], sell['position'])
+                    # d = self.dist(mothership_coords, buy['position']) + self.dist(buy['position'], sell['position'])
+                    d = self.dist(buy['position'], sell['position'])
                     score = price / (d ** 1.3)
                     best_deals.append((score, resource, buy, sell))
         return sorted(best_deals, reverse=True, key=lambda tup: tup[0])
