@@ -103,16 +103,16 @@ class Game:
                     sells[resource].append({'planet': planet,
                                             'sell_price': resource_data.sell_price,
                                             'position': planet_data.position})
-
         resources = sells.keys() & buys.keys()
+        breakpoint()
         best_deals = []
         for resource in resources:
             for buy in buys[resource]:
                 for sell in sells[resource]:
                     price = sell['sell_price'] - buy['buy_price']
                     if not mothership_coords:
-                        print('no mothership coords')
-                        continue
+                        # print('no mothership coords')
+                        pass
                     # d = self.dist(mothership_coords, buy['position']) + self.dist(buy['position'], sell['position'])
                     d = self.dist(buy['position'], sell['position'])
                     score = price / (d ** 1.3)
