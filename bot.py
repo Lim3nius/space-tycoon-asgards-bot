@@ -104,7 +104,6 @@ class Game:
                                             'sell_price': resource_data.sell_price,
                                             'position': planet_data.position})
         resources = sells.keys() & buys.keys()
-        breakpoint()
         best_deals = []
         for resource in resources:
             for buy in buys[resource]:
