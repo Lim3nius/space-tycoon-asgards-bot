@@ -103,6 +103,8 @@ class Game:
             for buy in buys[resource]:
                 for sell in sells[resource]:
                     price = sell['sell_price'] - buy['buy_price']
+                    if not mothership_coords:
+                        continue
                     d = self.dist(mothership_coords, buy['position']) + self.dist(buy['position'], sell['position'])
                     score = price / d
                     best_deals.append((score, resource, buy, sell))
