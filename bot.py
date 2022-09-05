@@ -1,4 +1,4 @@
-import random
+import math
 import traceback
 from collections import defaultdict
 from collections import Counter
@@ -16,6 +16,8 @@ from space_tycoon_client.models.data import Data
 from space_tycoon_client.models.destination import Destination
 from space_tycoon_client.models.end_turn import EndTurn
 from space_tycoon_client.models.move_command import MoveCommand
+from space_tycoon_client.models.attack_command import AttackCommand
+from space_tycoon_client.models.construct_command import ConstructCommand
 from space_tycoon_client.models.trade_command import TradeCommand
 from space_tycoon_client.models.player import Player
 from space_tycoon_client.models.player_id import PlayerId
@@ -72,22 +74,12 @@ class Game:
                     raise e
             except Exception as e:
                 print(f"!!! EXCEPTION !!! Game logic error {e}")
-                traceback.print_exception(e)
+                traceback.print_exc()
+                print(traceback.format_exc())
 
-    def game_logic(self):
-        # todo throw all this away
-        self.recreate_me()
-        my_ships: Dict[Ship] = {ship_id: ship for ship_id, ship in
-                                self.data.ships.items() if ship.player == self.player_id}
-        ship_type_cnt = Counter(
-            (self.static_data.ship_classes[ship.ship_class].name for ship in my_ships.values()))
-        pretty_ship_type_cnt = ', '.join(
-            f"{k}:{v}" for k, v in ship_type_cnt.most_common())
-        print(f"I have {len(my_ships)} ships ({pretty_ship_type_cnt})")
-
+    def get_cargo_plan(self):
         sells = defaultdict(dict)
         buys = defaultdict(dict)
-
         for planet, planet_data in self.data.planets.items():
             for resource, resource_data in planet_data.resources.items():
                 if resource_data.buy_price is not None:
@@ -96,7 +88,6 @@ class Game:
                     sells[resource][planet] = resource_data
 
         resources = sells.keys() & buys.keys()
-
         best_buys = dict()
         for resource in resources:
             best_buy_price = float('inf')
@@ -123,27 +114,75 @@ class Game:
             planet = best_buys[resource]['planet']
             amount = buys[resource][planet].amount
             plan.append((resource, planet, amount))
+        return plan, best_sells
+
+    def get_cargo_command(self, ship, plan, best_sells):
+        if ship.resources.keys():
+            resource = list(ship.resources.keys())[0]
+            planet = best_sells[resource]['planet']
+            amount = ship.resources[resource]['amount']
+            if amount:
+                return TradeCommand(target=planet, resource=resource, amount=-amount)
+        resource, planet, amount = plan.pop(0)
+        ship_load = sum(r['amount'] for r in ship.resources.values())
+        # ship_free_capacity = ship.cargo_capacity - ship_load # todo must use common data
+        return TradeCommand(target=planet, resource=resource, amount=min(amount, 10))
+
+    def dist(self, coords1, coords2):
+        return math.sqrt((coords1[0] - coords2[0]) ** 2 + (coords1[1] - coords2[1]) ** 2)
+
+    def get_mothership_command(self, ship, ship_id):
+        my_ships: Dict[Ship] = {ship_id: ship for ship_id, ship in
+                                self.data.ships.items() if ship.player == self.player_id}
+        ship_type_cnt = Counter(self.static_data.ship_classes[ship.ship_class].name for ship in my_ships.values())
+        if 'bomber' not in ship_type_cnt:
+            return ConstructCommand(ship_class='5')
+
+        other_fighter_ships = {ship_id: ship for ship_id, ship in self.data.ships.items() if
+                               ship.player != self.player_id and ship.ship_class in ('1', '4', '5', '6')}
+        my_coords = self.data.ships[ship_id].position
+        other_coords = {ship_id: self.data.ships[ship_id].position for ship_id in other_fighter_ships}
+        distances = Counter(
+            {ship_id: -self.dist(my_coords, other_coord) for ship_id, other_coord in other_coords.items()})
+        if distances:
+            closest_ship, smallest_dist = distances.most_common(1)[0]
+            smallest_dist *= -1
+            if smallest_dist < 20:
+                return AttackCommand(target=closest_ship)
+
+    def get_fighter_command(self, ship):
+        other_motherships = {ship_id: ship for ship_id, ship in
+                             self.data.ships.items() if ship.player != self.player_id and ship.ship_class == '1'}
+        if other_motherships:
+            mothership_id = list(other_motherships.keys())[0]
+            return AttackCommand(target=mothership_id)
+
+    def game_logic(self):
+        # todo throw all this away
+        self.recreate_me()
+        my_ships: Dict[Ship] = {ship_id: ship for ship_id, ship in
+                                self.data.ships.items() if ship.player == self.player_id}
+        ship_type_cnt = Counter(
+            (self.static_data.ship_classes[ship.ship_class].name for ship in my_ships.values()))
+        pretty_ship_type_cnt = ', '.join(
+            f"{k}:{v}" for k, v in ship_type_cnt.most_common())
+        print(f"I have {len(my_ships)} ships ({pretty_ship_type_cnt})")
+
+        plan, best_sells = self.get_cargo_plan()
 
         commands = {}
         for ship_id, ship in my_ships.items():
-            if ship.ship_class != '3':
-                continue
             if ship.command is not None:
                 continue
-            if ship.resources.keys():
-                resource = list(ship.resources.keys())[0]
-                planet = best_sells[resource]['planet']
-                amount = ship.resources[resource]['amount']
-                if amount:
-                    commands[ship_id] = TradeCommand(target=planet, resource=resource, amount=-amount)
-                    continue
-            random_planet_id = random.choice(list(self.data.planets.keys()))
-            print(f"sending {ship_id} to {self.data.planets[random_planet_id].name}({random_planet_id})")
-            # commands[ship_id] = MoveCommand(type="move", destination=Destination(target=random_planet_id))
-            resource, planet, amount = plan.pop(0)
-            ship_load = sum(r['amount'] for r in ship.resources.values())
-            # ship_free_capacity = ship.cargo_capacity - ship_load # todo must use common data
-            commands[ship_id] = TradeCommand(target=planet, resource=resource, amount=min(amount, 10))
+            command = None
+            if ship.ship_class in ('2', '3'):
+                command = self.get_cargo_command(ship, plan, best_sells)
+            if ship.ship_class == '1':
+                command = self.get_mothership_command(ship, ship_id)
+            if ship.ship_class in ('4', '5', '6'):
+                command = self.get_fighter_command(ship)
+            if command:
+                commands[ship_id] = command
 
         if commands:
             print('Commands:')
