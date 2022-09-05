@@ -208,6 +208,7 @@ class Game:
         for ship_id, ship in my_ships.items():
             if random.random() < 0.1:
                 commands[ship_id] = StopCommand()
+                commands[ship_id].type = 'stop'
                 continue
             if ship.command is not None:
                 continue
