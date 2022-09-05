@@ -51,7 +51,6 @@ class Game:
             raise Exception("Logged as non-existent player")
         self.recreate_me()
         print(f"playing as [{self.me.name}] id: {self.player_id}")
-        self.my_mothership_coords = None
 
     def recreate_me(self):
         self.me: Player = self.data.players[self.player_id]
@@ -109,11 +108,7 @@ class Game:
             for buy in buys[resource]:
                 for sell in sells[resource]:
                     price = sell['sell_price'] - buy['buy_price']
-                    if not mothership_coords:
-                        # print('no mothership coords')
-                        pass
-                    # d = self.dist(mothership_coords, buy['position']) + self.dist(buy['position'], sell['position'])
-                    d = self.dist(buy['position'], sell['position'])
+                    d = self.dist(mothership_coords, buy['position']) + self.dist(buy['position'], sell['position'])
                     score = price / (d ** 1.3)
                     best_deals.append((score, resource, buy, sell))
         return sorted(best_deals, reverse=True, key=lambda tup: tup[0])
@@ -149,14 +144,16 @@ class Game:
         for ship in self.data.ships.values():
             if ship.player == self.player_id and ship.ship_class == '1':
                 my_mothership = ship
-        if my_mothership:
-            self.my_mothership_coords = my_mothership.position
-        return self.my_mothership_coords
+        if not my_mothership:
+            for ship in self.data.wrecks.values():
+                if ship.player == self.player_id and ship.ship_class == '1':
+                    my_mothership = ship
+        return my_mothership.position
 
     def get_mothership_command(self, ship, ship_id):
         # return MoveCommand(destination=Destination(coordinates=[-412, -670]))
         # return AttackCommand(target='162900')
-        if self.data.ships[ship_id].life < 700:
+        if self.data.ships[ship_id].life < 800:
             return RepairCommand()
         my_ships: Dict[Ship] = {ship_id: ship for ship_id, ship in
                                 self.data.ships.items() if ship.player == self.player_id}
