@@ -115,7 +115,7 @@ class Game:
                     if not mothership_coords:
                         continue
                     d = self.dist(mothership_coords, buy['position']) + self.dist(buy['position'], sell['position'])
-                    score = price / d
+                    score = price / (d ** 1.1)
                     best_deals.append((score, resource, buy, sell))
         return sorted(best_deals, reverse=True, key=lambda tup: tup[0])
 
@@ -171,7 +171,7 @@ class Game:
         if distances:
             closest_ship, smallest_dist = distances.most_common(1)[0]
             smallest_dist *= -1
-            if smallest_dist < 200:
+            if smallest_dist < 100:
                 return AttackCommand(target=closest_ship)
 
         return self.construct_ship(ship_class='2')
@@ -191,11 +191,17 @@ class Game:
         if distances:
             closest_ship, smallest_dist = distances.most_common(1)[0]
             smallest_dist *= -1
-            if smallest_dist < 200:
+            if smallest_dist < 5:
                 return AttackCommand(target=closest_ship)
 
         mothership_coords = self.get_mothership_coords()
         return MoveCommand(destination=Destination(coordinates=mothership_coords))
+
+    def ship_stuck(self, ship, ship_id):
+        if ship.command and ship.command.type == 'trade':
+            planet_id = ship.command.target
+            planet = self.data.planets[planet_id]
+            return planet.position == ship.position
 
     def game_logic(self):
         # todo throw all this away
@@ -213,10 +219,12 @@ class Game:
 
         commands = {}
         for ship_id, ship in my_ships.items():
-            if random.random() < 0.1:
-                commands[ship_id] = StopCommand()
-                commands[ship_id].type = 'stop'
+            if ship.ship_class in ('2', '3') and self.ship_stuck(ship, ship_id):
+                command = self.get_cargo_command(ship, plan)
+                commands[ship_id] = command
                 continue
+            # if random.random() < 0.05:
+            #     commands[ship_id] = StopCommand()
             if ship.command is not None:
                 continue
             command = None
