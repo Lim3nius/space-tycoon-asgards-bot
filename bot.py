@@ -12,6 +12,9 @@ from pprint import pprint
 from typing import Dict, Optional, List
 from dataclasses import dataclass
 
+import numpy as np
+from math import cos, sin
+
 from space_tycoon_client import ApiClient
 from space_tycoon_client import Configuration
 from space_tycoon_client import GameApi
@@ -44,8 +47,8 @@ class Coords:
 
     def from_position(pos: List[int]) -> 'Coords':
         return Coords(
-            x=pos[0],
-            y=pos[1]
+            x=float(pos[0]),
+            y=float(pos[1])
         )
 
 
@@ -54,14 +57,24 @@ class EnemyShip:
     id: str
     ship_class: str
     position: Coords
-    vector: Coords
-    distance: float
-    ticks_approaching: int
-    target_ship_id: int
+    vector: Coords = Coords(0,0)
+    distance: float = 0
+    ticks_approaching: int = 0
+    target_ship_id: int = 0
 
     def __str__(self):
         return f'{self.ship_class}:{self.id}'
 
+    def __hash__(self):
+        return self.id
+
+def rotate_vector(vec: Coords, angle: int) -> Coords:
+    alpha = np.deg2rad(angle)
+    rot = np.array([[cos(alpha), -sin(alpha)],
+                    [sin(alpha), cos(alpha)]])
+
+    new_vec = np.dot(rot, np.array([vec.x, vec.y]))
+    return Coords(x=int(new_vec[0]), y=int(new_vec[1]))
 
 ships_class_mapping={
     '1': 'mothership',
@@ -78,6 +91,7 @@ def ship_class_id_to_human(id: str) -> str:
 
 SUSPICIOUS_TICK_INCOMING=15
 SUSPICIOUS_DISTANCE=170
+SHIP_ANGLE=10  # angle to consider to both sides from inital to result
 
 
 attacking_ship_classes={'mothership', 'fighter', 'bomber', 'desctroyer'}
@@ -93,7 +107,7 @@ class Game:
         self.season = self.data.current_tick.season
         self.tick = self.data.current_tick.tick
 
-        self.enemies_ships: List[EnemyShip] = []
+        self.enemies_ships: Set[EnemyShip] = []
         self.my_ships: List[Ship] = []
 
         # this part is custom logic, feel free to edit / delete
@@ -145,150 +159,38 @@ class Game:
                 print(f"!!! EXCEPTION !!! Game logic error {e}")
                 traceback.print_exc()
 
-<<<<<<< variant A
->>>>>>> variant B
-    def get_cargo_plan(self):
-        mothership_coords = self.get_mothership_coords()
-        buys = defaultdict(list)
-        sells = defaultdict(list)
-        for planet, planet_data in self.data.planets.items():
-            for resource, resource_data in planet_data.resources.items():
-                if resource_data.buy_price is not None:
-                    buys[resource].append({'planet': planet,
-                                           'amount': resource_data.amount,
-                                           'buy_price': resource_data.buy_price,
-                                           'position': planet_data.position})
-                if resource_data.sell_price is not None:
-                    sells[resource].append({'planet': planet,
-                                            'sell_price': resource_data.sell_price,
-                                            'position': planet_data.position})
-        resources = sells.keys() & buys.keys()
-        best_deals = []
-        for resource in resources:
-            for buy in buys[resource]:
-                for sell in sells[resource]:
-                    price = sell['sell_price'] - buy['buy_price']
-                    d = self.dist(mothership_coords, buy['position']) + self.dist(buy['position'], sell['position'])
-                    score = price / (d ** 1.3)
-                    best_deals.append((score, resource, buy, sell))
-        return sorted(best_deals, reverse=True, key=lambda tup: tup[0])
-
-    def get_cargo_command(self, ship, plan):
-        if ship.resources.keys():
-            resource = list(ship.resources.keys())[0]
-            # score, resource, buy, sell
-            for i, p in enumerate(plan):
-                if p[1] == resource:
-                    planet = p[3]['planet']
-                    amount = ship.resources[resource]['amount']
-                    return TradeCommand(target=planet, resource=resource, amount=-amount)
-
-        score, resource, buy, sell = plan.pop(0)
-        # ship_load = sum(r['amount'] for r in ship.resources.values())
-        # ship_free_capacity = ship.cargo_capacity - ship_load # todo must use common data
-
-        return TradeCommand(target=buy['planet'], resource=resource, amount=min(10 if ship.ship_class == '3' else 40,
-                                                                                buy['amount']))
-
     @staticmethod
     def move_vector(ship: Ship) -> Coords:
         return Coords(x=ship.prev_position[0] - ship.position[0],
                       y=ship.prev_position[1] - ship.position[1])
 
-    def dist(self, coords1, coords2):
-        return math.sqrt((coords1[0] - coords2[0]) ** 2 + (coords1[1] - coords2[1]) ** 2)
-
-    def construct_ship(self, ship_class):
-        my_money = self.data.players[self.player_id].net_worth.money
-        ship_price = self.static_data.ship_classes[ship_class].price
-        if (my_money - ship_price) > 80000:
-            return ConstructCommand(ship_class=ship_class)
-
-    def get_mothership_coords(self):
-        my_mothership = None
-        for ship in self.data.ships.values():
-            if ship.player == self.player_id and ship.ship_class == '1':
-                my_mothership = ship
-        if not my_mothership:
-            for ship in self.data.wrecks.values():
-                if ship.player == self.player_id and ship.ship_class == '1':
-                    my_mothership = ship
-        return my_mothership.position
-
-    def get_mothership_command(self, ship, ship_id):
-        # return MoveCommand(destination=Destination(coordinates=[-412, -670]))
-        # return AttackCommand(target='162900')
-        if self.data.ships[ship_id].life < 800:
-            return RepairCommand()
-        my_ships: Dict[Ship] = {ship_id: ship for ship_id, ship in
-                                self.data.ships.items() if ship.player == self.player_id}
-        ship_type_cnt = Counter(self.static_data.ship_classes[ship.ship_class].name for ship in my_ships.values())
-
-        if 'fighter' not in ship_type_cnt or ship_type_cnt['fighter'] < 3:
-            return self.construct_ship(ship_class='4')
-
-        other_fighter_ships = {ship_id: ship for ship_id, ship in self.data.ships.items() if
-                               ship.player != self.player_id and ship.ship_class in ('1', '4', '5', '6')}
-        my_coords = self.data.ships[ship_id].position
-        other_coords = {ship_id: self.data.ships[ship_id].position for ship_id in other_fighter_ships}
-        distances = Counter(
-            {ship_id: self.dist(my_coords, other_coord) for ship_id, other_coord in other_coords.items()})
-        distances = [(self.data.ships[ship_id].ship_class, ship_id, dist)
-                     for ship_id, dist in distances.items() if dist < 100]
-        distances = sorted(distances, reverse=True)
-        if distances:
-            _, ship_id, d = distances[0]
-            return AttackCommand(target=ship_id)
-
-        return self.construct_ship(ship_class='2')
-
-    def get_fighter_command(self, ship, ship_id):
-        # other_motherships = {ship_id: ship for ship_id, ship in
-        #                      self.data.ships.items() if ship.player != self.player_id and ship.ship_class == '1'}
-        # if other_motherships:
-        #     mothership_id = list(other_motherships.keys())[0]
-        #     return AttackCommand(target=mothership_id)
-
-        other_ships = {ship_id: ship for ship_id, ship in self.data.ships.items() if ship.player != self.player_id}
-        my_coords = self.data.ships[ship_id].position
-        other_coords = {ship_id: self.data.ships[ship_id].position for ship_id in other_ships}
-        distances = Counter(
-            {ship_id: self.dist(my_coords, other_coord) for ship_id, other_coord in other_coords.items()})
-        distances = [(self.data.ships[ship_id].ship_class, ship_id, dist)
-                     for ship_id, dist in distances.items() if dist < 5]
-        distances = sorted(distances, reverse=True)
-        if distances:
-            _, ship_id, d = distances[0]
-            return AttackCommand(target=ship_id)
-
-        mothership_coords = self.get_mothership_coords()
-        return MoveCommand(destination=Destination(coordinates=mothership_coords))
-
-    def ship_stuck(self, ship, ship_id):
-        if ship.command and ship.command.type == 'trade':
-            planet_id = ship.command.target
-            planet = self.data.planets[planet_id]
-            return planet.position == ship.position
-
     def detect_enemies(self):
         '''saves positions and vector of enemy ships into self.enemies_ships'''
-        self.enemies_ships = []
+        self.enemies_ships = {}
         for ship_id, ship in self.data.ships.items():
-            if ship_class_id_to_human(ship.ship_class) in attacking_ship_classes and ship.player != self.player_id:
-                self.enemies_ships.append(EnemyShip(
+            ship_class = ship_class_id_to_human(ship.ship_class)
+            if ship_class in attacking_ship_classes and ship.player != self.player_id:
+                self.enemies_ships.update([EnemyShip(
                     id=ship_id,
+                    ship_class=ship_class,
                     position=Coords.from_position(ship.position),
                     vector=self.move_vector(ship)
-                ))
+                )])
+
+        print(f'detected enemies: {self.enemies_ships}')
 
     def update_incoming_enemies(self):
         '''checks which ships are probably targeted by enemies'''
         for enemy_ship in self.enemies_ships:
-            target = min(
-                [(self.dist(s, enemy_ship), s) for s self.own_ships
-                 if self.vector_points_to_point(enemy_ship.position, enemy_ship.vector, s)],
+            # breakpoint()
+            comp = [(self.dist(s.position, enemy_ship.position), s) for s in self.my_ships.values()
+                    if self.vector_points_to_point(enemy_ship.position, enemy_ship.vector, Coords.from_position(s.position))]
+            if not comp:
+                return
+
+            target = min( comp,
                 key=lambda x: x[0])
-            if target[0] < enemy_ship.distance
+            if target[0] < enemy_ship.distance:
                 enemy_ship.ticks_approaching += 1
                 enemy_ship.distance = target[0]
 
@@ -297,13 +199,30 @@ class Game:
                 enemy_ship.target_ship_id = target[1].id
                 print(f'detected ship: {enemy_ship} targeting our ship: {target[1]}')
 
-    def get_my_ships(self):
-        self.my_ships = {ship_id: ship for ship_id, ship in
-                         self.data.ships.items() if ship.player == self.player_id}
 
     @staticmethod
-    def vector_points_to_point(p0: Coords, vec: Coords, target: Coords) -> bool:
-        par0, par1 = (target.x - p0.x) / coords.x, (target.y - p0.y) / coords.y
+    def point_heading_for_point(point: Coords, vector: Coords, target: Coords) -> bool:
+        if vec.x == 0 and vec.y ==0:
+            return point == target
+
+        vec0 = rotate_vector(vector, SHIP_ANGLE)
+        vec1 = rotate_vector(vector, -SHIP_ANGLE)
+
+
+
+    @staticmethod
+    def vector_points_to_point(point: Coords, vec: Coords, target: Coords) -> bool:
+        if vec.x == 0 and vec.y ==0:
+            return point == target
+
+        if vec.y == 0:
+            return (target.x - point.x) / vec.x != 0
+
+        if vec.x == 0:
+            return (target.y - point.y) / vec.y != 0
+
+        par0 = (target.x - point.x) / vec.x
+        par1 = (target.y - point.y) / vec.y
         return abs(par0 - par1) < 0.1
 
 ======= end
