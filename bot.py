@@ -270,7 +270,7 @@ class Game:
             return planet.position == ship.position
 
     def detect_enemies(self):
-        # saves positions and vector of enemy ships into self.enemies_ships
+        '''saves positions and vector of enemy ships into self.enemies_ships'''
         self.enemies_ships = []
         for ship_id, ship in self.data.ships.items():
             if ship_class_id_to_human(ship.ship_class) in attacking_ship_classes and ship.player != self.player_id:
@@ -281,8 +281,12 @@ class Game:
                 ))
 
     def update_incoming_enemies(self):
+        '''checks which ships are probably targeted by enemies'''
         for enemy_ship in self.enemies_ships:
-            target = min([(self.dist(s, enemy_ship), s) for s self.own_ships], key=lambda x: x[0])
+            target = min(
+                [(self.dist(s, enemy_ship), s) for s self.own_ships
+                 if self.vector_points_to_point(enemy_ship.position, enemy_ship.vector, s)],
+                key=lambda x: x[0])
             if target[0] < enemy_ship.distance
                 enemy_ship.ticks_approaching += 1
                 enemy_ship.distance = target[0]
@@ -296,6 +300,10 @@ class Game:
         self.my_ships = {ship_id: ship for ship_id, ship in
                          self.data.ships.items() if ship.player == self.player_id}
 
+    @staticmethod
+    def vector_points_to_point(p0: Coords, vec: Coords, target: Coords) -> bool:
+        par0, par1 = (target.x - p0.x) / coords.x, (target.y - p0.y) / coords.y
+        return abs(par0 - par1) < 0.1
 
 ======= end
     def game_logic(self):
