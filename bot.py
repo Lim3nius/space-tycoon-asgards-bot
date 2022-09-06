@@ -53,8 +53,15 @@ class Coords:
 @dataclass
 class EnemyShip:
     id: str
+    ship_class: str
     position: Coords
     vector: Coords
+    distance: float
+    ticks_approaching: int
+    target_ship_id: int
+
+    def __str__(self):
+        return f'{self.ship_class}:{self.id}'
 
 
 ships_class_mapping={
@@ -69,6 +76,9 @@ ships_class_mapping={
 
 def ship_class_id_to_human(id: str) -> str:
     return ships_class_mapping[id]
+
+SUSPICIOUS_TICK_INCOMING=15
+SUSPICIOUS_DISTANCE=170
 
 
 attacking_ship_classes={'mothership', 'fighter', 'bomber', 'desctroyer'}
@@ -85,6 +95,7 @@ class Game:
         self.tick = self.data.current_tick.tick
 
         self.enemies_ships: List[EnemyShip] = []
+        self.my_ships: List[Ship] = []
 
         # this part is custom logic, feel free to edit / delete
         if self.player_id not in self.data.players:
@@ -262,14 +273,33 @@ class Game:
                     vector=self.move_vector(ship)
                 ))
 
+    def update_incoming_enemies(self):
+        for enemy_ship in self.enemies_ships:
+            target = min([(self.dist(s, enemy_ship), s) for s self.own_ships], key=lambda x: x[0])
+            if target[0] < enemy_ship.distance
+                enemy_ship.ticks_approaching += 1
+                enemy_ship.distance = target[0]
+
+            if enemy_ship.ticks_approaching >= SUSPICIOUS_TICK_INCOMING or \
+               enemy_ship.distance <= SUSPICIOUS_DISTANCE:
+                enemy_ship.target_ship_id = target[1].id
+                print(f'detected ship: {enemy_ship} targeting our ship: {target[1]}')
+
+    def get_my_ships(self):
+        self.my_ships = {ship_id: ship for ship_id, ship in
+                         self.data.ships.items() if ship.player == self.player_id}
+
+
     def game_logic(self):
         # todo throw all this away
         self.recreate_me()
 
+        self.get_my_ships()
         self.detect_enemies()
+        self.update_incoming_enemies()
 
-        my_ships: Dict[Ship] = {ship_id: ship for ship_id, ship in
-                                self.data.ships.items() if ship.player == self.player_id}
+        my_ships = self.my_ships
+
         ship_type_cnt = Counter(
             (self.static_data.ship_classes[ship.ship_class].name for ship in my_ships.values()))
         pretty_ship_type_cnt = ', '.join(
