@@ -5,6 +5,7 @@ import traceback
 import enum
 import yaml
 import sys
+import argparse
 from collections import defaultdict
 from collections import Counter
 from pprint import pprint
@@ -371,12 +372,16 @@ def main_loop(api_client, config):
 
 
 def main():
-    config = yaml.safe_load(open(CONFIG_FILE))
-    print(f"Loaded config file {CONFIG_FILE}")
+    a = argparse.ArgumentParser()
+    a.add_argument('-c', '--config', default=CONFIG_FILE, help='Option to specify alternative config')
+    args = a.parse_args()
+
+    config = yaml.safe_load(open(args.config))
+    print(f"Loaded config file {args.config}")
     print(f"Loaded config values {config}")
     configuration = Configuration()
     if config["host"] == "?":
-        print(f"Host was not configured in the config file [{CONFIG_FILE}]")
+        print(f"Host was not configured in the config file [{args.config}]")
         return
 
     configuration.host = config["host"]
