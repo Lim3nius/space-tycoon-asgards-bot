@@ -18,7 +18,7 @@ class MothershipPlanner(Planner):
     def plan(self, ship, ship_id):
         # return MoveCommand(destination=Destination(coordinates=[-412, -670]))
         # return AttackCommand(target='230989')
-        if self.data.ships[ship_id].life < 800:
+        if self.data.ships[ship_id].life < 600:
             return RepairCommand()
         my_ships = {ship_id: ship for ship_id, ship in
                     self.data.ships.items() if ship.player == self.player_id}
@@ -39,5 +39,5 @@ class MothershipPlanner(Planner):
         if distances:
             _, ship_id, d = distances[0]
             return AttackCommand(target=ship_id)
-        if self.game.tick > 500:
+        if self.game.tick > 800:
             return self.construct_ship(ship_class='2')
