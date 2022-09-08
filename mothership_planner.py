@@ -3,6 +3,7 @@ from collections import Counter
 from planner import Planner
 from space_tycoon_client.models.construct_command import ConstructCommand
 from space_tycoon_client.models.repair_command import RepairCommand
+from space_tycoon_client.models.attack_command import AttackCommand
 
 
 class MothershipPlanner(Planner):
@@ -24,8 +25,8 @@ class MothershipPlanner(Planner):
                     self.data.ships.items() if ship.player == self.player_id}
         ship_type_cnt = Counter(self.static_data.ship_classes[ship.ship_class].name for ship in my_ships.values())
 
-        # if 'fighter' not in ship_type_cnt or ship_type_cnt['fighter'] < 3:
-        #     return self.construct_ship(ship_class='4')
+        if 'fighter' not in ship_type_cnt or ship_type_cnt['fighter'] < 1:
+            return self.construct_ship(ship_class='4')
 
         other_fighter_ships = {ship_id: ship for ship_id, ship in self.data.ships.items() if
                                ship.player != self.player_id and ship.ship_class in ('1', '4', '5', '6')}
