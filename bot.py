@@ -9,7 +9,7 @@ import argparse
 from collections import defaultdict
 from collections import Counter
 from pprint import pprint
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Callable
 from dataclasses import dataclass
 
 import numpy as np
@@ -32,6 +32,7 @@ from space_tycoon_client.rest import ApiException
 from cargo_planner import CargoPlanner
 from fighter_planner import FighterPlanner
 from mothership_planner import MothershipPlanner
+from planner import Planner
 
 CONFIG_FILE = "config.yml"
 
@@ -51,6 +52,14 @@ class Coords:
             y=float(pos[1])
         )
 
+    def __getitem__(self, key):
+        if key == 0:
+            return self.x
+        elif key == 1:
+            return self.y
+        else:
+            raise Exception('nooooo')
+
 
 @dataclass
 class EnemyShip:
@@ -58,7 +67,7 @@ class EnemyShip:
     ship_class: str
     position: Coords
     vector: Coords = Coords(0,0)
-    distance: float = 0
+    distance: float = float('inf')
     ticks_approaching: int = 0
     target_ship_id: int = 0
 
@@ -66,7 +75,10 @@ class EnemyShip:
         return f'{self.ship_class}:{self.id}'
 
     def __hash__(self):
-        return self.id
+        return int(self.id)
+
+    def __eq__(self, other):
+        return self.id == other.id
 
 def rotate_vector(vec: Coords, angle: int) -> Coords:
     alpha = np.deg2rad(angle)
@@ -74,7 +86,31 @@ def rotate_vector(vec: Coords, angle: int) -> Coords:
                     [sin(alpha), cos(alpha)]])
 
     new_vec = np.dot(rot, np.array([vec.x, vec.y]))
-    return Coords(x=int(new_vec[0]), y=int(new_vec[1]))
+    return Coords(x=new_vec[0], y=new_vec[1])
+
+def normal_to_vector(vec: Coords) -> Coords:
+    return Coords(
+        x=-vec.y,
+        y=vec.x)
+
+def compute_line_equation(vec: Coords, point: Coords) -> Callable[[float, float], float]:
+    def inner(x: float, y: float) -> float:
+        c = -vec.x * point.x - vec.y * point.y
+        return vec.x * x + vec.y * y + c
+    return inner
+
+def point_is_looking_at(point: Coords, vec: Coords, target: Coords) -> bool:
+    # breakpoint()
+    v0 = rotate_vector(vec, SHIP_ANGLE)
+    v1 = rotate_vector(vec, -SHIP_ANGLE)
+
+    n0 = normal_to_vector(v0)
+    n1 = normal_to_vector(v1)
+
+    e0 = compute_line_equation(n0, point)
+    e1 = compute_line_equation(n1, point)
+
+    return e0(target.x, target.y) > 0 and e1(target.x, target.y) < 0
 
 ships_class_mapping={
     '1': 'mothership',
@@ -89,7 +125,7 @@ ships_class_mapping={
 def ship_class_id_to_human(id: str) -> str:
     return ships_class_mapping[id]
 
-SUSPICIOUS_TICK_INCOMING=15
+SUSPICIOUS_TICK_INCOMING=30
 SUSPICIOUS_DISTANCE=170
 SHIP_ANGLE=10  # angle to consider to both sides from inital to result
 
@@ -107,7 +143,7 @@ class Game:
         self.season = self.data.current_tick.season
         self.tick = self.data.current_tick.tick
 
-        self.enemies_ships: Set[EnemyShip] = []
+        self.enemies_ships: Set[EnemyShip] = dict()
         self.my_ships: List[Ship] = []
 
         # this part is custom logic, feel free to edit / delete
@@ -139,16 +175,20 @@ class Game:
                 t0 = datetime.datetime.now()
                 try:
                     self.update_planners()
+                    self.my_ships = self.mothership_planner.get_my_ships()
+                    self.detect_enemies()
+                    self.update_incoming_enemies()
                     self.game_logic()
                 finally:
                     print(f'Tick took: {datetime.datetime.now() - t0}')
 
-                current_tick: CurrentTick = self.client.end_turn_post(EndTurn(
-                    tick=self.tick,
-                    season=self.season
-                ))
-                self.tick = current_tick.tick
-                self.season = current_tick.season
+                    current_tick: CurrentTick = self.client.end_turn_post(EndTurn(
+                        tick=self.tick,
+                        season=self.season
+                    ))
+
+                    self.tick = current_tick.tick
+                    self.season = current_tick.season
             except ApiException as e:
                 if e.status == 403:
                     print(f"New season started or login expired: {e}")
@@ -166,28 +206,40 @@ class Game:
 
     def detect_enemies(self):
         '''saves positions and vector of enemy ships into self.enemies_ships'''
-        self.enemies_ships = {}
+        # self.enemies_ships = set()
         for ship_id, ship in self.data.ships.items():
             ship_class = ship_class_id_to_human(ship.ship_class)
             if ship_class in attacking_ship_classes and ship.player != self.player_id:
-                self.enemies_ships.update([EnemyShip(
-                    id=ship_id,
-                    ship_class=ship_class,
-                    position=Coords.from_position(ship.position),
-                    vector=self.move_vector(ship)
-                )])
+                # breakpoint()
+                if ship_id not in self.enemies_ships:
+                    self.enemies_ships[ship_id] = EnemyShip(
+                        id=ship_id,
+                        ship_class=ship_class,
+                        position=Coords.from_position(ship.position),
+                        vector=self.move_vector(ship)
+                    )
+                else:
+                    en = self.enemies_ships[ship_id]
+                    en.position = Coords.from_position(ship.position)
+                    en.vector = self.move_vector(ship)
 
         print(f'detected enemies: {self.enemies_ships}')
 
     def update_incoming_enemies(self):
         '''checks which ships are probably targeted by enemies'''
-        for enemy_ship in self.enemies_ships:
+        for enemy_ship in self.enemies_ships.values():
             # breakpoint()
-            comp = [(self.dist(s.position, enemy_ship.position), s) for s in self.my_ships.values()
-                    if self.vector_points_to_point(enemy_ship.position, enemy_ship.vector, Coords.from_position(s.position))]
+
+            comp = []
+            for i, s in self.my_ships.items():
+                if point_is_looking_at(enemy_ship.position, enemy_ship.vector, Coords.from_position(s.position)):
+                    comp.append((Planner.dist(s.position, enemy_ship.position), s, i))
+            # comp = [(self.dist(s.position, enemy_ship.position), s) for s in self.my_ships.values()
+            #         if point_is_looking_at(enemy_ship.position, enemy_ship.vector, Coords.from_position(s.position))]
             if not comp:
                 return
 
+            # breakpoint()
             target = min( comp,
                 key=lambda x: x[0])
             if target[0] < enemy_ship.distance:
@@ -196,36 +248,36 @@ class Game:
 
             if enemy_ship.ticks_approaching >= SUSPICIOUS_TICK_INCOMING or \
                enemy_ship.distance <= SUSPICIOUS_DISTANCE:
-                enemy_ship.target_ship_id = target[1].id
-                print(f'detected ship: {enemy_ship} targeting our ship: {target[1]}')
+                # breakpoint()
+                enemy_ship.target_ship_id = target[2]
+                print(f'detected ship: {enemy_ship} targeting our ship: id: {target[2]}, {target[1]}')
 
 
-    @staticmethod
-    def point_heading_for_point(point: Coords, vector: Coords, target: Coords) -> bool:
-        if vec.x == 0 and vec.y ==0:
-            return point == target
+    # @staticmethod
+    # def point_heading_for_point(point: Coords, vector: Coords, target: Coords) -> bool:
+    #     if vec.x == 0 and vec.y ==0:
+    #         return point == target
 
-        vec0 = rotate_vector(vector, SHIP_ANGLE)
-        vec1 = rotate_vector(vector, -SHIP_ANGLE)
+    #     vec0 = rotate_vector(vector, SHIP_ANGLE)
+    #     vec1 = rotate_vector(vector, -SHIP_ANGLE)
 
 
 
-    @staticmethod
-    def vector_points_to_point(point: Coords, vec: Coords, target: Coords) -> bool:
-        if vec.x == 0 and vec.y ==0:
-            return point == target
+    # @staticmethod
+    # def vector_points_to_point(point: Coords, vec: Coords, target: Coords) -> bool:
+    #     if vec.x == 0 and vec.y ==0:
+    #         return point == target
 
-        if vec.y == 0:
-            return (target.x - point.x) / vec.x != 0
+    #     if vec.y == 0:
+    #         return (target.x - point.x) / vec.x != 0
 
-        if vec.x == 0:
-            return (target.y - point.y) / vec.y != 0
+    #     if vec.x == 0:
+    #         return (target.y - point.y) / vec.y != 0
 
-        par0 = (target.x - point.x) / vec.x
-        par1 = (target.y - point.y) / vec.y
-        return abs(par0 - par1) < 0.1
+    #     par0 = (target.x - point.x) / vec.x
+    #     par1 = (target.y - point.y) / vec.y
+    #     return abs(par0 - par1) < 0.1
 
-======= end
     def game_logic(self):
         self.recreate_me()
         my_ships = self.mothership_planner.get_my_ships()

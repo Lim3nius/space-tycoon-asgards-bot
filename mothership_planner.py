@@ -18,7 +18,7 @@ class MothershipPlanner(Planner):
 
     def plan(self, ship, ship_id):
         # return MoveCommand(destination=Destination(coordinates=[-412, -670]))
-        # return AttackCommand(target='230989')
+        # return AttackCommand(target='12716')
         if self.data.ships[ship_id].life < 600:
             return RepairCommand()
         my_ships = {ship_id: ship for ship_id, ship in
