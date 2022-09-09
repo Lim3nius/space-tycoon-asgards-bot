@@ -20,10 +20,26 @@ class FighterPlanner(Planner):
         other_ships = {ship_id: ship for ship_id, ship in self.data.ships.items() if ship.player != self.player_id}
         my_coords = self.data.ships[ship_id].position
         other_coords = {ship_id: self.data.ships[ship_id].position for ship_id in other_ships}
+
         distances = Counter(
             {ship_id: self.dist(my_coords, other_coord) for ship_id, other_coord in other_coords.items()})
         distances = [(self.data.ships[ship_id].ship_class, ship_id, dist)
-                     for ship_id, dist in distances.items() if dist < 10]
+                     for ship_id, dist in distances.items()
+                     if dist < 100 and self.data.ships[ship_id].ship_class == '4' and
+                     ('amazon' in self.data.ships[ship_id].name or 'ducks' in self.data.ships[ship_id].name or
+                      'opponent' in self.data.ships[ship_id].name)]
+        distances = sorted(distances, reverse=True)
+        if distances:
+            _, ship_id, d = distances[0]
+            return AttackCommand(target=ship_id)
+
+        distances = Counter(
+            {ship_id: self.dist(my_coords, other_coord) for ship_id, other_coord in other_coords.items()})
+        distances = [(self.data.ships[ship_id].ship_class, ship_id, dist)
+                     for ship_id, dist in distances.items()
+                     if dist < 1500 and self.data.ships[ship_id].ship_class in ('2', '3') and
+                     ('amazon' in self.data.ships[ship_id].name or 'ducks' in self.data.ships[ship_id].name or
+                      'opponent' in self.data.ships[ship_id].name)]
         distances = sorted(distances, reverse=True)
         if distances:
             _, ship_id, d = distances[0]

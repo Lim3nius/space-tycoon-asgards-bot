@@ -14,7 +14,7 @@ class MothershipPlanner(Planner):
     def construct_ship(self, ship_class):
         my_money = self.data.players[self.player_id].net_worth.money
         ship_price = self.static_data.ship_classes[ship_class].price
-        if (my_money - ship_price) > 80000:
+        if (my_money - ship_price) > 1000000:
             return ConstructCommand(ship_class=ship_class)
 
     def plan(self, ship, ship_id):
@@ -25,8 +25,8 @@ class MothershipPlanner(Planner):
             return RepairCommand()
         my_ships = {ship_id: s for ship_id, s in self.data.ships.items() if s.player == self.player_id}
         ship_type_cnt = Counter(self.static_data.ship_classes[s.ship_class].name for s in my_ships.values())
-        # if 'fighter' not in ship_type_cnt or ship_type_cnt['fighter'] < 1:
-        #     return self.construct_ship(ship_class='4')
+        if 'fighter' not in ship_type_cnt or ship_type_cnt['fighter'] < 1 and self.game.tick < 20:
+            return self.construct_ship(ship_class='4')
         other_fighter_ships = {ship_id: s for ship_id, s in self.data.ships.items() if
                                s.player != self.player_id and s.ship_class in ('1', '4', '5', '6')}
         my_coords = self.data.ships[ship_id].position
@@ -34,10 +34,14 @@ class MothershipPlanner(Planner):
         distances = Counter(
             {ship_id: self.dist(my_coords, other_coord) for ship_id, other_coord in other_coords.items()})
         distances = [(self.data.ships[ship_id].ship_class, ship_id, dist)
-                     for ship_id, dist in distances.items() if dist < 10]
+                     for ship_id, dist in distances.items() if dist < 20]
         distances = sorted(distances, reverse=True)
         if distances:
             _, ship_id, d = distances[0]
             return AttackCommand(target=ship_id)
-        if self.game.tick > 800:
+        if self.game.tick > 1000:
+            if 'hauler' not in ship_type_cnt or ship_type_cnt['hauler'] < 3:
+                return self.construct_ship(ship_class='2')
+            if 'fighter' not in ship_type_cnt or ship_type_cnt['fighter'] < 3:
+                return self.construct_ship(ship_class='4')
             return self.construct_ship(ship_class='2')
