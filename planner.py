@@ -31,7 +31,7 @@ class Planner:
                 if ship.player == self.player_id and ship.ship_class == '1':
                     my_mothership = ship
         self.mothership_coords = my_mothership.position
-        return self.mothership_coord
+        return my_mothership.position
 
     @staticmethod
     def dist(coords1, coords2):
