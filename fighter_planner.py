@@ -25,9 +25,7 @@ class FighterPlanner(Planner):
             {ship_id: self.dist(my_coords, other_coord) for ship_id, other_coord in other_coords.items()})
         distances = [(self.data.ships[ship_id].ship_class, ship_id, dist)
                      for ship_id, dist in distances.items()
-                     if self.data.ships[ship_id].ship_class == '4' and
-                     ('amazon' in self.data.ships[ship_id].name or 'ducks' in self.data.ships[ship_id].name or
-                      'opponent' in self.data.ships[ship_id].name)]
+                     if self.data.ships[ship_id].ship_class == '4']
         distances = sorted(distances, reverse=True)
         if distances:
             _, ship_id, d = distances[0]
