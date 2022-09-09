@@ -6,6 +6,7 @@ from space_tycoon_client.models.repair_command import RepairCommand
 from space_tycoon_client.models.attack_command import AttackCommand
 from space_tycoon_client.models.stop_command import StopCommand
 from space_tycoon_client.models.move_command import MoveCommand
+from space_tycoon_client.models.destination import Destination
 
 
 class MothershipPlanner(Planner):
