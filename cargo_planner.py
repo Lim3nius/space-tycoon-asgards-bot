@@ -3,6 +3,8 @@ from collections import defaultdict
 
 from planner import Planner
 from space_tycoon_client.models.trade_command import TradeCommand
+from space_tycoon_client.models.move_command import MoveCommand
+from space_tycoon_client.models.destination import Destination
 
 
 class CargoPlanner(Planner):
@@ -43,6 +45,7 @@ class CargoPlanner(Planner):
         return False
 
     def plan(self, ship, ship_id, plan):
+        return MoveCommand(destination=Destination(self.get_mothership_coords()))
         if ship.command and not self.ship_stuck(ship, ship_id):
             return
         if ship.resources.keys():

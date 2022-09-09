@@ -20,8 +20,8 @@ class Planner:
                 self.data.ships.items() if ship.player == self.player_id}
 
     def get_mothership_coords(self):
-        if self.mothership_coords:
-            return self.mothership_coords
+        # if self.mothership_coords:
+        #     return self.mothership_coords
         my_mothership = None
         for ship in self.data.ships.values():
             if ship.player == self.player_id and ship.ship_class == '1':
