@@ -46,7 +46,7 @@ class MothershipPlanner(Planner):
         distances = sorted(distances, reverse=True)
         print('distances', distances)
         if distances:
-            close_fighters = [(c, sid, p, d) for c, sid, p, d in distances if c == '4' and d < 5000]
+            close_fighters = [(c, sid, p, d) for c, sid, p, d in distances if c == '4' and d < 5]
             if close_fighters:
                 c, sid, p, d = close_fighters[0]
                 return AttackCommand(target=sid)

@@ -4,6 +4,7 @@ from planner import Planner
 from space_tycoon_client.models.move_command import MoveCommand
 from space_tycoon_client.models.attack_command import AttackCommand
 from space_tycoon_client.models.destination import Destination
+from space_tycoon_client.models.repair_command import RepairCommand
 
 
 class FighterPlanner(Planner):
@@ -11,6 +12,8 @@ class FighterPlanner(Planner):
         super().__init__()
 
     def plan(self, ship, ship_id):
+        if self.data.ships[ship_id].life < 50:
+            return RepairCommand()
         # other_motherships = {ship_id: ship for ship_id, ship in
         #                      self.data.ships.items() if ship.player != self.player_id and ship.ship_class == '1'}
         # if other_motherships:
