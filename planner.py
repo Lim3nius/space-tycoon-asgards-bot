@@ -7,6 +7,7 @@ class Planner:
         self.data = None
         self.static_data = None
         self.player_id = None
+        self.mothership_coords = None
 
     def update_game(self, game):
         self.game = game
@@ -19,6 +20,8 @@ class Planner:
                 self.data.ships.items() if ship.player == self.player_id}
 
     def get_mothership_coords(self):
+        if self.mothership_coords:
+            return self.mothership_coords
         my_mothership = None
         for ship in self.data.ships.values():
             if ship.player == self.player_id and ship.ship_class == '1':
@@ -27,7 +30,8 @@ class Planner:
             for ship in self.data.wrecks.values():
                 if ship.player == self.player_id and ship.ship_class == '1':
                     my_mothership = ship
-        return my_mothership.position
+        self.mothership_coords = my_mothership.position
+        return self.mothership_coord
 
     @staticmethod
     def dist(coords1, coords2):
