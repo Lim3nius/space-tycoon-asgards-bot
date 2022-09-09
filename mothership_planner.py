@@ -31,6 +31,8 @@ class MothershipPlanner(Planner):
         #         return command
         other_fighter_ships = {ship_id: s for ship_id, s in self.data.ships.items() if
                                s.player != self.player_id and s.ship_class in ('1', '4', '5', '6')}
+        other_fighter_ship_type_cnt = Counter(self.static_data.ship_classes[s.ship_class].name
+                                              for s in other_fighter_ships.values())
         my_coords = self.data.ships[ship_id].position
         other_coords = {ship_id: self.data.ships[ship_id].position for ship_id in other_fighter_ships}
         distances = Counter(
@@ -47,8 +49,9 @@ class MothershipPlanner(Planner):
                 command = self.construct_ship(ship_class='2')
                 if command:
                     return command
-            if 'fighter' not in ship_type_cnt or ship_type_cnt['fighter'] < 3:
-                command = self.construct_ship(ship_class='4')
-                if command:
-                    return command
+            if 'fighter' not in other_fighter_ships:
+                if 'fighter' not in ship_type_cnt or ship_type_cnt['fighter'] < 3:
+                    command = self.construct_ship(ship_class='4')
+                    if command:
+                        return command
             return self.construct_ship(ship_class='2')
