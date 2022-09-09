@@ -37,19 +37,70 @@ class MothershipPlanner(Planner):
         other_coords = {ship_id: self.data.ships[ship_id].position for ship_id in other_fighter_ships}
         distances = Counter(
             {ship_id: self.dist(my_coords, other_coord) for ship_id, other_coord in other_coords.items()})
-        distances = [(self.data.ships[ship_id].ship_class, ship_id, dist)
-                     for ship_id, dist in distances.items() if dist < 20]
+        # duck_ms_distances = [(self.data.ships[ship_id].ship_class, ship_id, dist)
+        #                      for ship_id, dist in distances.items()
+        #                      if self.data.ships[ship_id].ship_class == '1'
+        #                      and ('ducks' in self.data.ships[ship_id].name
+        #                           or 'opponent' in self.data.ships[ship_id].name)]
+        # fighter_distances = [(self.data.ships[ship_id].ship_class, ship_id, dist)
+        #                      for ship_id, dist in distances.items()
+        #                      if self.data.ships[ship_id].ship_class == '4']
+        # duck_other_distances = [(self.data.ships[ship_id].ship_class, ship_id, dist)
+        #                         for ship_id, dist in distances.items()
+        #                         if ('ducks' in self.data.ships[ship_id].name
+        #                             or 'opponent' in self.data.ships[ship_id].name)]
+        # if fighter_distances:
+        #     f_distances = [(self.data.ships[ship_id].ship_class, ship_id, dist)
+        #                    for ship_id, dist in fighter_distances.items() if dist < 5]
+        #     f_distances = sorted(f_distances, reverse=True)
+        #     if f_distances:
+        #         _, ship_id, d = f_distances[0]
+        #         return AttackCommand(target=ship_id)
+        #
+        # if duck_ms_distances:
+        #     ms_distances = [(self.data.ships[ship_id].ship_class, ship_id, dist)
+        #                     for ship_id, dist in duck_ms_distances.items()]
+        #     ms_distances = sorted(ms_distances, reverse=True)
+        #     if ms_distances:
+        #         _, ship_id, d = ms_distances[0]
+        #         return AttackCommand(target=ship_id)
+        #
+        # if duck_other_distances:
+        #     o_distances = [(self.data.ships[ship_id].ship_class, ship_id, dist)
+        #                    for ship_id, dist in duck_other_distances.items()]
+        #     o_distances = sorted(o_distances, reverse=True)
+        #     if o_distances:
+        #         _, ship_id, d = o_distances[0]
+        #         return AttackCommand(target=ship_id)
+
+        distances = [(self.data.ships[ship_id].ship_class, ship_id, self.data.ships[ship_id].player, dist)
+                     for ship_id, dist in distances.items()]
         distances = sorted(distances, reverse=True)
         print('distances', distances)
         if distances:
-            _, ship_id, d = distances[0]
-            return AttackCommand(target=ship_id)
+            close_fighters = [(c, sid, p, d) for c, sid, p, d in distances if c == '4' and d < 5]
+            if close_fighters:
+                c, sid, p, d = close_fighters[0]
+                return AttackCommand(target=sid)
+            close_ms = [(c, sid, p, d) for c, sid, p, d in distances if c == '1' and d < 3]
+            if close_ms:
+                c, sid, p, d = close_ms[0]
+                return AttackCommand(target=sid)
+            duck_ms = [(c, sid, p, d) for c, sid, p, d in distances if c == '1' and p == '5']
+            # duck_ms = [(c, sid, p, d) for c, sid, p, d in distances if c == '1' and p in ('1','3')] # TODO local test
+            if duck_ms:
+                c, sid, p, d = duck_ms[0]
+                return AttackCommand(target=sid)
+            other_cargo = [(c, sid, p, d) for c, sid, p, d in distances if c in ('2', '3') and d < 3]
+            if other_cargo:
+                c, sid, p, d = other_cargo[0]
+                return AttackCommand(target=sid)
         if self.game.tick > 1000:
             if 'hauler' not in ship_type_cnt or ship_type_cnt['hauler'] < 3:
                 command = self.construct_ship(ship_class='2')
                 if command:
                     return command
-            if 'fighter' not in other_fighter_ships:
+            if 'fighter' not in other_fighter_ship_type_cnt:
                 if 'fighter' not in ship_type_cnt or ship_type_cnt['fighter'] < 3:
                     command = self.construct_ship(ship_class='4')
                     if command:
