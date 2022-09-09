@@ -18,7 +18,7 @@ class MothershipPlanner(Planner):
             return ConstructCommand(ship_class=ship_class)
 
     def plan(self, ship, ship_id):
-        return AttackCommand(target='1552944')
+        # return AttackCommand(target='1552944')
         # return StopCommand()
         # return MoveCommand(destination=Destination(coordinates=[-412, -670]))
         # return AttackCommand(target='12716')
