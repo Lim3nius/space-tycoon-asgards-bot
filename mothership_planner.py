@@ -25,8 +25,10 @@ class MothershipPlanner(Planner):
             return RepairCommand()
         my_ships = {ship_id: s for ship_id, s in self.data.ships.items() if s.player == self.player_id}
         ship_type_cnt = Counter(self.static_data.ship_classes[s.ship_class].name for s in my_ships.values())
-        if 'fighter' not in ship_type_cnt or ship_type_cnt['fighter'] < 1 and self.game.tick < 20:
-            return self.construct_ship(ship_class='4')
+        # if 'fighter' not in ship_type_cnt or ship_type_cnt['fighter'] < 1 and self.game.tick < 2:
+        #     command = self.construct_ship(ship_class='4')
+        #     if command:
+        #         return command
         other_fighter_ships = {ship_id: s for ship_id, s in self.data.ships.items() if
                                s.player != self.player_id and s.ship_class in ('1', '4', '5', '6')}
         my_coords = self.data.ships[ship_id].position
@@ -36,12 +38,17 @@ class MothershipPlanner(Planner):
         distances = [(self.data.ships[ship_id].ship_class, ship_id, dist)
                      for ship_id, dist in distances.items() if dist < 20]
         distances = sorted(distances, reverse=True)
+        print('distances', distances)
         if distances:
             _, ship_id, d = distances[0]
             return AttackCommand(target=ship_id)
         if self.game.tick > 1000:
             if 'hauler' not in ship_type_cnt or ship_type_cnt['hauler'] < 3:
-                return self.construct_ship(ship_class='2')
+                command = self.construct_ship(ship_class='2')
+                if command:
+                    return command
             if 'fighter' not in ship_type_cnt or ship_type_cnt['fighter'] < 3:
-                return self.construct_ship(ship_class='4')
+                command = self.construct_ship(ship_class='4')
+                if command:
+                    return command
             return self.construct_ship(ship_class='2')
