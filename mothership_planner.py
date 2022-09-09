@@ -4,6 +4,7 @@ from planner import Planner
 from space_tycoon_client.models.construct_command import ConstructCommand
 from space_tycoon_client.models.repair_command import RepairCommand
 from space_tycoon_client.models.attack_command import AttackCommand
+from space_tycoon_client.models.stop_command import StopCommand
 
 
 class MothershipPlanner(Planner):
@@ -17,25 +18,23 @@ class MothershipPlanner(Planner):
             return ConstructCommand(ship_class=ship_class)
 
     def plan(self, ship, ship_id):
+        # return StopCommand()
         # return MoveCommand(destination=Destination(coordinates=[-412, -670]))
         # return AttackCommand(target='12716')
         if self.data.ships[ship_id].life < 600:
             return RepairCommand()
-        my_ships = {ship_id: ship for ship_id, ship in
-                    self.data.ships.items() if ship.player == self.player_id}
-        ship_type_cnt = Counter(self.static_data.ship_classes[ship.ship_class].name for ship in my_ships.values())
-
-        if 'fighter' not in ship_type_cnt or ship_type_cnt['fighter'] < 1:
-            return self.construct_ship(ship_class='4')
-
-        other_fighter_ships = {ship_id: ship for ship_id, ship in self.data.ships.items() if
-                               ship.player != self.player_id and ship.ship_class in ('1', '4', '5', '6')}
+        my_ships = {ship_id: s for ship_id, s in self.data.ships.items() if s.player == self.player_id}
+        ship_type_cnt = Counter(self.static_data.ship_classes[s.ship_class].name for s in my_ships.values())
+        # if 'fighter' not in ship_type_cnt or ship_type_cnt['fighter'] < 1:
+        #     return self.construct_ship(ship_class='4')
+        other_fighter_ships = {ship_id: s for ship_id, s in self.data.ships.items() if
+                               s.player != self.player_id and s.ship_class in ('1', '4', '5', '6')}
         my_coords = self.data.ships[ship_id].position
         other_coords = {ship_id: self.data.ships[ship_id].position for ship_id in other_fighter_ships}
         distances = Counter(
             {ship_id: self.dist(my_coords, other_coord) for ship_id, other_coord in other_coords.items()})
         distances = [(self.data.ships[ship_id].ship_class, ship_id, dist)
-                     for ship_id, dist in distances.items() if dist < 100]
+                     for ship_id, dist in distances.items() if dist < 10]
         distances = sorted(distances, reverse=True)
         if distances:
             _, ship_id, d = distances[0]
