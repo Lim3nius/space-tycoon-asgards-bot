@@ -62,10 +62,10 @@ class MothershipPlanner(Planner):
                 c, sid, p, d = other_cargo[0]
                 return AttackCommand(target=sid)
         if self.game.tick > 1000:
-            if 'hauler' not in ship_type_cnt or ship_type_cnt['hauler'] < 3:
-                command = self.construct_ship(ship_class='2')
-                if command:
-                    return command
+            # if 'hauler' not in ship_type_cnt or ship_type_cnt['hauler'] < 3:
+            #     command = self.construct_ship(ship_class='2')
+            #     if command:
+            #         return command
             if 'fighter' not in other_fighter_ship_type_cnt:
                 if 'fighter' not in ship_type_cnt or ship_type_cnt['fighter'] < 3:
                     command = self.construct_ship(ship_class='4')

@@ -46,9 +46,6 @@ class CargoPlanner(Planner):
         return False
 
     def plan(self, ship, ship_id, plan):
-        if ship_id == '1554046':
-            return DecommissionCommand()
-        return MoveCommand(destination=Destination(self.get_mothership_coords()))
         if ship.command and not self.ship_stuck(ship, ship_id):
             return
         if ship.resources.keys():
